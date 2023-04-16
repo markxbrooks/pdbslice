@@ -104,17 +104,17 @@ else
 end
 
 infilebase = infile.gsub('.pdb','')
-if File.exists?(infile)
+if File.exist?(infile)
   puts "Found file"
 else
-  system "wget \"http://www.rcsb.org/pdb//cgi/export.cgi/#{infilebase}.pdb.gz?format=PDB&pdbId=#{infilebase}&compression=gz\" -O #{infilebase}.pdb.gz"
-  if File.exists?("#{infilebase}.pdb.gz")
-    system "gunzip #{infilebase}.pdb.gz"
+  system "curl \"https://files.rcsb.org/download/#{infilebase}.pdb\" -o #{infilebase}.pdb"
+  if File.exist?(infile)
+    puts "Download complete of #{infile}"
   else
     puts "Could not find file at RCSB.org"
   end
 end
-if File.exists?(infile)
+if File.exist?(infile)
   file = File.new(infile).gets(nil)
   structure = Bio::PDB.new(file)
   fragment = ""
@@ -142,7 +142,6 @@ if File.exists?(infile)
   outFh.puts fragment
   outFh.close
 else
-  #system "wget \"http://www.rcsb.org/pdb//cgi/export.cgi/#{infilebase}.pdb.gz?format=PDB&pdbId=#{infilebase}&compression=gz\" -O #{infilebase}.pdb.gz"
-  #system "gunzip #{infilebase}.pdb.gz"
-  #puts "File #{infile} not found"
+  puts "File #{infile} not found"
+  system "curl \"https://files.rcsb.org/download/#{infilebase}.pdb\" -o #{infilebase}.pdb"
 end
