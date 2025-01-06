@@ -45,10 +45,9 @@ module BB
 end
 
 
-if ( (ARGV.length != 4) && (ARGV.length != 6) && (ARGV.length != 8) && (ARGV.length != 10))
-  puts ARGV.length.to_s + " args"
-  puts "Missing argument(s)"
-     BB::usage(-1)
+if ARGV.empty?
+  puts "Missing arguments"
+  BB::usage(-1)
 end
 
 
@@ -104,44 +103,56 @@ else
 end
 
 infilebase = infile.gsub('.pdb','')
-if File.exist?(infile)
-  puts "Found file"
-else
+def download_pdb_file(infile, infilebase)
+  puts "Attempting to download #{infile} from RCSB.org..."
   system "curl \"https://files.rcsb.org/download/#{infilebase}.pdb\" -o #{infilebase}.pdb"
   if File.exist?(infile)
     puts "Download complete of #{infile}"
+    true
   else
     puts "Could not find file at RCSB.org"
+    false
   end
 end
+
+if !File.exist?(infile)
+  exit unless download_pdb_file(infile, infilebase)
+end
+
 if File.exist?(infile)
-  file = File.new(infile).gets(nil)
-  structure = Bio::PDB.new(file)
-  fragment = ""
-  if (sequence)
-    #This choice for outputting sequence
-    fragment = ">#{infilebase} "+ structure[nil][chain].aaseq.molecular_weight.round.to_s + " Da\n" + structure[nil][chain].aaseq
-    suffixout = ".pir"
-  else
-    #Here for writing coordinates
-    if (delete)
-      puts "delete mode\n"
-      #if chain
-      structure[nil][chain].each {|residue| fragment << residue.to_s unless residue.residue_id.to_i.between?(first,last)}
-      #else
-      #  structure[nil][nil].each {|residue| fragment << residue.to_s unless residue.residue_id.to_i.between?(first,last)}
-      #end
-    else
-      structure[nil][chain].each {|residue| fragment << residue.to_s if residue.residue_id.to_i.between?(first,last)}
-    end
-    suffixout = ".pdb"
+  begin
+    file = File.new(infile).gets(nil)
+    structure = Bio::PDB.new(file)
+    
+    fragment, suffixout = process_structure(structure, chain, first, last, sequence, delete)
+    
+    outfile ||= "#{infilebase}-#{chain}#{firstname}#{lastname}#{suffixout}"
+    File.write(outfile, fragment)
+    puts "Writing result to: #{outfile}"
+  rescue => e
+    puts "Error processing PDB file: #{e.message}"
+    exit 1
   end
-  outfile ||= infilebase + "-" + chain + firstname + lastname + suffixout
-  outFh = File.new(outfile, 'w')
-  puts "Writing result to: #{outfile}"
-  outFh.puts fragment
-  outFh.close
 else
   puts "File #{infile} not found"
   system "curl \"https://files.rcsb.org/download/#{infilebase}.pdb\" -o #{infilebase}.pdb"
 end
+
+def process_structure(structure, chain, first, last, sequence, delete)
+  if sequence
+    fragment = ">#{infilebase} #{structure[nil][chain].aaseq.molecular_weight.round} Da\n#{structure[nil][chain].aaseq}"
+    [fragment, ".pir"]
+  else
+    fragment = if delete
+      structure[nil][chain].map { |residue| 
+        residue.to_s unless residue.residue_id.to_i.between?(first, last)
+      }.compact.join
+    else
+      structure[nil][chain].map { |residue| 
+        residue.to_s if residue.residue_id.to_i.between?(first, last)
+      }.compact.join
+    end
+    [fragment, ".pdb"]
+  end
+end
+
